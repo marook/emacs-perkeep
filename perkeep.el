@@ -45,7 +45,7 @@
 (defun perkeep--fetch-default-ui-config (callback)
   (perkeep--request "/ui/?camli.mode=config" callback))
 
-;; (perkeep-search (perkeep-query-expression "tag:solln") `(lambda (data) (message "Result: %S" data)))
+;; (perkeep-search (perkeep-query-expression "tag:solln") `(lambda (data) (switch-to-buffer (generate-new-buffer "perkeep-debug")) (insert (json-encode data)) (json-pretty-print-buffer) (javascript-mode)))
 (defun perkeep-search (query callback)
   "perkeep-search is the main entry point for performing a search
 against the perkeep repository.
@@ -77,7 +77,13 @@ Example query strings are:
   tag:todo
   attr:year:2020"
   `(
-   ("expression" . ,(eval expression))))
+    ("expression" . ,(eval expression))
+    ("describe" .
+     (
+      ("rules" .
+       (
+        (
+         ("attrs" . ("camliContent")))))))))
 
 (cl-defun perkeep--request (path callback
                               &key
@@ -110,15 +116,36 @@ Example query strings are:
        (switch-to-buffer permanodes-buffer)
        (insert expression "\n\n")
        (setq permanodes-start (point))
-       (mapc
-        (lambda (blob-obj)
-          (insert
-           (cdr (assoc-string "blob" blob-obj))
-           "\n"))
-        (cdr (assoc-string "blobs" response)))
+       (perkeep--insert-search-results response)
        (goto-char permanodes-start)
        (perkeep-mode)
        ))))
+
+(defun perkeep--insert-search-results (results)
+  (mapc
+   (lambda (blob-obj)
+     (perkeep--insert-found-permanode (cdr (assoc-string "blob" blob-obj)) results))
+   (cdr (assoc-string "blobs" results))))
+
+(defun perkeep--insert-found-permanode (blob-ref results)
+  (insert blob-ref "\n")
+  (let (description)
+    (setq description (cdr (assoc-string blob-ref (assoc-string "meta" (assoc-string "description" results)))))
+    (when
+        (not (string= "permanode" (cdr (assoc-string "camliType" description))))
+      (error
+       "Expected permanode response from server but got %S"
+       (cdr (assoc-string "camliType" description))))
+    (mapc
+     (lambda (attrs)
+       (insert (format-message "\t%S\n" (car attrs)))
+       (mapc
+        (lambda (value)
+          (insert "\t\t" value "\n"))
+        (cdr attrs))
+       )
+     (cdr (assoc-string "attr" (assoc-string "permanode" description))))
+    ))
 
 (defun perkeep-follow-permanode ()
   "Visit the permanode named on this line."
