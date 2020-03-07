@@ -97,9 +97,7 @@ Example query strings are:
      ;; :sync "t"
      :success (cl-function
                (lambda (&key data &allow-other-keys)
-                 (condition-case nil
-                     (funcall callback data)
-                   ((debug))))))))
+                 (funcall callback data))))))
 
 (defun perkeep-find-permanode (expression)
   "Performs a perkeep serach for a given expression and shows the found permanodes in a newly created buffer"
@@ -107,16 +105,43 @@ Example query strings are:
   (perkeep-search
    (perkeep-query-expression expression)
    (lambda (response)
-     (let (permanodes-buffer)
+     (let (permanodes-buffer permanodes-start)
        (setq permanodes-buffer (generate-new-buffer "perkeep"))
        (switch-to-buffer permanodes-buffer)
        (insert expression "\n\n")
+       (setq permanodes-start (point))
        (mapc
         (lambda (blob-obj)
           (insert
            (cdr (assoc-string "blob" blob-obj))
            "\n"))
-        (cdr (assoc-string "blobs" response)))))))
+        (cdr (assoc-string "blobs" response)))
+       (goto-char permanodes-start)
+       (perkeep-mode)
+       ))))
+
+(defun perkeep-follow-permanode ()
+  "Visit the permanode named on this line."
+  (interactive)
+  (message "TODO follow")
+  )
+  
+(defvar perkeep-mode-map
+  (let ((map (make-keymap)))
+    (set-keymap-parent map special-mode-map)
+    (define-key map "f" 'perkeep-follow-permanode)
+    map)
+  "Local keymap for perkeep mode buffers.")
+
+(defun perkeep-mode ()
+  (kill-all-local-variables)
+  (use-local-map perkeep-mode-map)
+  (setq major-mode 'perkeep-mode
+	mode-name "perkeep"
+	;; case-fold-search nil
+	buffer-read-only t
+	selective-display t) ; for subdirectory hiding
+  )
 
 (provide 'perkeep)
 
