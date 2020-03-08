@@ -85,6 +85,18 @@ Example query strings are:
         (
          ("attrs" . ("camliContent")))))))))
 
+(cl-defun perkeep--download (blob-ref file-name callback)
+  (perkeep--default-ui-config
+   (lambda (ui-config)
+     (perkeep--request
+      (concat
+       (cdr (assoc-string "downloadHelper" ui-config))
+       blob-ref
+       "/"
+       file-name)
+      callback
+      :parser 'buffer-string))))
+
 (cl-defun perkeep--request (path callback
                               &key
                               (data nil)
@@ -150,13 +162,60 @@ Example query strings are:
 (defun perkeep-follow-permanode ()
   "Visit the permanode named on this line."
   (interactive)
-  (message "TODO follow")
+  (let (camli-content)
+    (setq camli-content (car (perkeep--get-permanode-attr "camliContent")))
+    (perkeep--download
+     camli-content
+     "blob"
+     (lambda (blob)
+       (let (blob-buffer)
+         (setq blob-buffer (generate-new-buffer "blob"))
+         (switch-to-buffer blob-buffer)
+         (insert blob)
+         (goto-char (point-min))
+       ))
+    )))
+
+(defun perkeep--move-to-permanode ()
+  "Moves point to the beginning of the current permanode"
+  (beginning-of-line)
+  (while
+      (and
+       (not (bobp))
+       (string= "\t" (substring (thing-at-point 'whitespace) 0 1)))
+    (forward-line -1))
   )
-  
+
+(defun perkeep--get-permanode-attr (key)
+  "Returns the attribute values with a given key of the permanode below
+point."
+  (perkeep--move-to-permanode)
+  (forward-line 1)
+  (let (values current-key)
+    (setq values ())
+    (while
+        (and
+         (not (eobp))
+         (string= "\t" (thing-at-point 'whitespace)))
+      (setq current-key (substring (thing-at-point 'line) 1 -1))
+      (forward-line 1)
+      (while
+          (and
+           (not (eobp))
+           (string= "\t\t" (thing-at-point 'whitespace)))
+        (when (string= current-key key)
+          (setq values (append (list (substring (thing-at-point 'line) 2 -1)) values))
+          )
+        (forward-line 1)
+        )
+      )
+    values))
+
 (defvar perkeep-mode-map
   (let ((map (make-keymap)))
     (set-keymap-parent map special-mode-map)
     (define-key map "f" 'perkeep-follow-permanode)
+    (define-key map "C-m" 'perkeep-follow-permanode)
     map)
   "Local keymap for perkeep mode buffers.")
 
@@ -168,6 +227,7 @@ Example query strings are:
 	;; case-fold-search nil
 	buffer-read-only t
 	selective-display t) ; for subdirectory hiding
+  (setq-local tab-width 2)
   )
 
 (provide 'perkeep)
