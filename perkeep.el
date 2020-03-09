@@ -160,21 +160,35 @@ Example query strings are:
     ))
 
 (defun perkeep-follow-permanode ()
-  "Visit the permanode named on this line."
+  "Visit the permanode named on this line.
+
+This will open the permanode's content in a new buffer if it has a
+camliContent attribute. Otherwise it will open a new search buffer which
+shows the members of this permanode."
   (interactive)
-  (let (camli-content)
+  (let (permanode-ref camli-content)
+    (setq permanode-ref (perkeep--get-permanode-ref))
     (setq camli-content (car (perkeep--get-permanode-attr "camliContent")))
-    (perkeep--download
-     camli-content
-     "blob"
-     (lambda (blob)
-       (let (blob-buffer)
-         (setq blob-buffer (generate-new-buffer "blob"))
-         (switch-to-buffer blob-buffer)
-         (insert blob)
-         (goto-char (point-min))
-       ))
-    )))
+    (if camli-content
+        (perkeep--follow-permanode-camli-content
+         permanode-ref
+         (car (perkeep--get-permanode-attr "title"))
+         "blob" ;; TODO determine actual file name from perkeep
+         camli-content)
+      (error "TODO implement visiting permanode members"))))
+
+(defun perkeep--follow-permanode-camli-content (permanode-ref title file-name camli-content)
+  (perkeep--download
+   camli-content
+   file-name
+   (lambda (blob)
+     (let (blob-buffer)
+       (setq blob-buffer (generate-new-buffer (or title file-name)))
+       (switch-to-buffer blob-buffer)
+       (setq-local perkeep-permanode-ref permanode-ref)
+       (setq-local perkeep-file-name file-name)
+       (insert blob)
+       (goto-char (point-min))))))
 
 (defun perkeep--move-to-permanode ()
   "Moves point to the beginning of the current permanode"
@@ -186,30 +200,37 @@ Example query strings are:
     (forward-line -1))
   )
 
+(defun perkeep--get-permanode-ref ()
+  "Returns the permanode ref of the permanode below point."
+  (save-excursion
+    (perkeep--move-to-permanode)
+    (substring (thing-at-point 'line) 0 -1)))
+
 (defun perkeep--get-permanode-attr (key)
   "Returns the attribute values with a given key of the permanode below
 point."
-  (perkeep--move-to-permanode)
-  (forward-line 1)
-  (let (values current-key)
-    (setq values ())
-    (while
-        (and
-         (not (eobp))
-         (string= "\t" (thing-at-point 'whitespace)))
-      (setq current-key (substring (thing-at-point 'line) 1 -1))
-      (forward-line 1)
+  (save-excursion
+    (perkeep--move-to-permanode)
+    (forward-line 1)
+    (let (values current-key)
+      (setq values ())
       (while
           (and
            (not (eobp))
-           (string= "\t\t" (thing-at-point 'whitespace)))
-        (when (string= current-key key)
-          (setq values (append (list (substring (thing-at-point 'line) 2 -1)) values))
-          )
+           (string= "\t" (thing-at-point 'whitespace)))
+        (setq current-key (substring (thing-at-point 'line) 1 -1))
         (forward-line 1)
+        (while
+            (and
+             (not (eobp))
+             (string= "\t\t" (thing-at-point 'whitespace)))
+          (when (string= current-key key)
+            (setq values (append (list (substring (thing-at-point 'line) 2 -1)) values))
+            )
+          (forward-line 1)
+          )
         )
-      )
-    values))
+      values)))
 
 (defvar perkeep-mode-map
   (let ((map (make-keymap)))
