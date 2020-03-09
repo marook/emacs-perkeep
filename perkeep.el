@@ -124,7 +124,7 @@ Example query strings are:
    (perkeep-query-expression expression)
    (lambda (response)
      (let (permanodes-buffer permanodes-start)
-       (setq permanodes-buffer (generate-new-buffer "perkeep"))
+       (setq permanodes-buffer (generate-new-buffer expression))
        (switch-to-buffer permanodes-buffer)
        (insert expression "\n\n")
        (setq permanodes-start (point))
