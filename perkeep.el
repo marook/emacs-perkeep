@@ -178,10 +178,7 @@ Example query strings are:
   (cdr (assoc-string blob-ref (assoc-string "meta" (assoc-string "description" results)))))
 
 (defun perkeep--insert-permanode-value (level value)
-  (while (> level 0)
-    (insert "\t")
-    (setq level (1- level)))
-  
+  (insert (make-string level ?\t))
   (insert
    (cond
     ((numberp value) (format-message "%S" value))
@@ -197,19 +194,19 @@ shows the members of this permanode."
   (interactive)
   (let (permanode-ref camli-content)
     (setq permanode-ref (perkeep--get-permanode-ref))
-    (setq camli-content (car (perkeep--get-permanode-attr "camliContent")))
+    (setq camli-content (car (perkeep--get-permanode-attr '("camliContent"))))
     (if camli-content
         (perkeep--follow-permanode-camli-content
          permanode-ref
-         (car (perkeep--get-permanode-attr "title"))
-         "blob" ;; TODO determine actual file name from perkeep
+         (car (perkeep--get-permanode-attr '("title")))
+         (car (perkeep--get-permanode-attr (list "camliContent" camli-content "file" "fileName")))
          camli-content)
       (error "TODO implement visiting permanode members"))))
 
 (defun perkeep--follow-permanode-camli-content (permanode-ref title file-name camli-content)
   (perkeep--download
    camli-content
-   file-name
+   "blob"
    (lambda (blob)
      (let (blob-buffer)
        (setq blob-buffer (generate-new-buffer (or title file-name)))
@@ -235,31 +232,51 @@ shows the members of this permanode."
     (perkeep--move-to-permanode)
     (substring (thing-at-point 'line) 0 -1)))
 
-(defun perkeep--get-permanode-attr (key)
+;; TODO rename function. maybe it makes sense to call the perkeep permanode attr property attr and the buffer's permanode values (which are a combinaion of permanote attr and file properties) attributes? there are some more functions which would benefit from a clear definiton of the names.
+(defun perkeep--get-permanode-attr (key-chain)
   "Returns the attribute values with a given key of the permanode below
 point."
   (save-excursion
     (perkeep--move-to-permanode)
     (forward-line 1)
-    (let (values current-key)
-      (setq values ())
-      (while
-          (and
-           (not (eobp))
-           (string= "\t" (thing-at-point 'whitespace)))
-        (setq current-key (substring (thing-at-point 'line) 1 -1))
-        (forward-line 1)
-        (while
-            (and
-             (not (eobp))
-             (string= "\t\t" (thing-at-point 'whitespace)))
-          (when (string= current-key key)
-            (setq values (append (list (substring (thing-at-point 'line) 2 -1)) values))
-            )
-          (forward-line 1)
-          )
-        )
-      values)))
+    (let ((level 1))
+      (mapc
+       (lambda (key)
+         (when
+             (perkeep--find-permanode-attribute level key))
+         (setq level (1+ level)))
+       key-chain)
+      (perkeep--collect-level-values level))))
+
+(defun perkeep--find-permanode-attribute (level key)
+  (let ((level-prefix (make-string level ?\t))
+        current-key
+        result)
+    (while
+        (and
+         (not result)
+         (not (eobp))
+         (string= level-prefix (thing-at-point 'whitespace)))
+      (setq current-key (substring (thing-at-point 'line) level -1))
+      (forward-line 1)
+      (if (string= current-key key)
+          (setq result t)
+        (perkeep--collect-level-values (1+ level))))
+    result))
+
+(defun perkeep--collect-level-values (level)
+  "Collects values for a given level at point and walks over them."
+  (let ((level-prefix (make-string level ?\t))
+        current-key
+        (values ()))
+    (while
+        (and
+         (not (eobp))
+         (string= level-prefix (substring (thing-at-point 'whitespace) 0 (min level (length (thing-at-point 'whitespace))))))
+      (when (string= level-prefix (thing-at-point 'whitespace))
+        (setq values (append values (list (substring (thing-at-point 'line) level -1)))))
+      (forward-line 1))
+    values))
 
 (defvar perkeep-mode-map
   (let ((map (make-keymap)))
