@@ -141,7 +141,7 @@ Example query strings are:
 
 (defun perkeep--insert-found-permanode (blob-ref results)
   (insert blob-ref "\n")
-  (let (description)
+  (let ((description (perkeep--find-description-by-ref blob-ref results)))
     (setq description (cdr (assoc-string blob-ref (assoc-string "meta" (assoc-string "description" results)))))
     (when
         (not (string= "permanode" (cdr (assoc-string "camliType" description))))
@@ -150,14 +150,43 @@ Example query strings are:
        (cdr (assoc-string "camliType" description))))
     (mapc
      (lambda (attrs)
-       (insert (format-message "\t%S\n" (car attrs)))
-       (mapc
-        (lambda (value)
-          (insert "\t\t" value "\n"))
-        (cdr attrs))
-       )
+       (let ((key (car attrs)))
+         (insert (format-message "\t%S\n" key))
+         (mapc
+          (lambda (value)
+            (perkeep--insert-permanode-attribute-value 2 key value results))
+          (cdr attrs))
+         ))
      (cdr (assoc-string "attr" (assoc-string "permanode" description))))
     ))
+
+(defun perkeep--insert-permanode-attribute-value (level key value results)
+  (perkeep--insert-permanode-value level value)
+  (cond
+   ((string= key "camliContent")
+    (let ((file-description (perkeep--find-description-by-ref value results)))
+      (perkeep--insert-permanode-value (1+ level) "file")
+      (mapc
+       (lambda (key)
+         (let ((file-value (cdr (assoc-string key (assoc-string "file" file-description)))))
+           (when file-value
+             (perkeep--insert-permanode-value (+ level 2) key)
+             (perkeep--insert-permanode-value (+ level 3) file-value))))
+       '("fileName" "size" "mimeType"))))))
+
+(defun perkeep--find-description-by-ref (blob-ref results)
+  (cdr (assoc-string blob-ref (assoc-string "meta" (assoc-string "description" results)))))
+
+(defun perkeep--insert-permanode-value (level value)
+  (while (> level 0)
+    (insert "\t")
+    (setq level (1- level)))
+  
+  (insert
+   (cond
+    ((numberp value) (format-message "%S" value))
+    (t value))
+   "\n"))
 
 (defun perkeep-follow-permanode ()
   "Visit the permanode named on this line.
