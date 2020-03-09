@@ -117,6 +117,7 @@ Example query strings are:
                (lambda (&key data &allow-other-keys)
                  (funcall callback data))))))
 
+;;;###autoload
 (defun perkeep-find-permanode (expression)
   "Performs a perkeep serach for a given expression and shows the found permanodes in a newly created buffer"
   (interactive "sExpression: ")
@@ -218,6 +219,21 @@ shows the members of this permanode."
        (goto-char (point-min))
        (set-auto-mode)))))
 
+(defun perkeep-previous-permanode ()
+  (interactive)
+  (perkeep--move-to-permanode)
+  (unless (bobp)
+    (forward-line -1))
+  (perkeep--move-to-permanode))
+
+(defun perkeep-next-permanode ()
+  (interactive)
+  (beginning-of-line)
+  (unless (eobp)
+    (forward-line 1))
+  (perkeep--collect-level-values 1)
+  (recenter))
+
 (defun perkeep--move-to-permanode ()
   "Moves point to the beginning of the current permanode"
   (beginning-of-line)
@@ -284,10 +300,32 @@ point."
   (let ((map (make-keymap)))
     (set-keymap-parent map special-mode-map)
     (define-key map "f" 'perkeep-follow-permanode)
-    (define-key map "C-m" 'perkeep-follow-permanode)
+    (define-key map "\C-m" 'perkeep-follow-permanode)
+    (define-key map "p" 'perkeep-previous-permanode)
+    (define-key map "n" 'perkeep-next-permanode)
+    (define-key map " " 'perkeep-next-permanode)
     map)
   "Local keymap for perkeep mode buffers.")
 
+(defgroup perkeep-faces nil
+  "Faces used by perkeep."
+  :group 'perkeep
+  :group 'faces)
+
+(defface perkeep-permanode-ref
+  '((t (:inherit bold)))
+  "Face used for permanode refs."
+  :group 'perkeep-faces
+  :version "22.1")
+(defvar perkeep-permanode-ref-face 'perkeep-permanode-ref
+  "Face name used for permanode refs.")
+
+(defvar perkeep-font-lock-keywords
+  (list
+   (list "^sha[0-9]+-[a-z0-9]+$" '(0 perkeep-permanode-ref-face))
+  ))
+
+;;;###autoload
 (defun perkeep-mode ()
   (kill-all-local-variables)
   (use-local-map perkeep-mode-map)
@@ -297,6 +335,9 @@ point."
 	buffer-read-only t
 	selective-display t) ; for subdirectory hiding
   (setq-local tab-width 2)
+  (setq-local font-lock-defaults
+              '(perkeep-font-lock-keywords t nil nil beginning-of-line))
+  (font-lock-ensure)
   )
 
 (provide 'perkeep)
