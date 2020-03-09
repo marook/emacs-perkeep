@@ -212,9 +212,11 @@ shows the members of this permanode."
        (setq blob-buffer (generate-new-buffer (or title file-name)))
        (switch-to-buffer blob-buffer)
        (setq-local perkeep-permanode-ref permanode-ref)
-       (setq-local perkeep-file-name file-name)
+       (setq-local buffer-file-name file-name)
        (insert blob)
-       (goto-char (point-min))))))
+       (set-buffer-modified-p nil)
+       (goto-char (point-min))
+       (set-auto-mode)))))
 
 (defun perkeep--move-to-permanode ()
   "Moves point to the beginning of the current permanode"
