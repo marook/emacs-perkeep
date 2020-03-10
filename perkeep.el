@@ -302,8 +302,8 @@ point."
     (define-key map "f" 'perkeep-follow-permanode)
     (define-key map "\C-m" 'perkeep-follow-permanode)
     (define-key map "p" 'perkeep-previous-permanode)
-    (define-key map "n" 'perkeep-next-permanode)
     (define-key map " " 'perkeep-next-permanode)
+    (define-key map "n" 'perkeep-next-permanode)
     map)
   "Local keymap for perkeep mode buffers.")
 
@@ -313,26 +313,44 @@ point."
   :group 'faces)
 
 (defface perkeep-permanode-ref
-  '((t (:inherit bold)))
+  '((t (:inherit link)))
   "Face used for permanode refs."
   :group 'perkeep-faces
   :version "22.1")
 (defvar perkeep-permanode-ref-face 'perkeep-permanode-ref
   "Face name used for permanode refs.")
 
+(defface perkeep-permanode-attribute-key
+  '((t (:inherit bold)))
+  "Face used for permanode attribute keys."
+  :group 'perkeep-faces
+  :version "22.1")
+(defvar perkeep-permanode-attribute-key-face 'perkeep-permanode-attribute-key
+  "Face name used for permanode attribute keys.")
+
+(defface perkeep-permanode-attribute-metadata
+  '((t (:inherit shadow)))
+  "Face used for extra metadata shown below permanode attribute values."
+  :group 'perkeep-faces
+  :version "22.1")
+(defvar perkeep-permanode-attribute-metadata-face 'perkeep-permanode-attribute-metadata
+  "Face name used for permanode attribute metadata.")
+
 (defvar perkeep-font-lock-keywords
   (list
    (list "^sha[0-9]+-[a-z0-9]+$" '(0 perkeep-permanode-ref-face))
+   (list "^\t[^\t].*$" '(0 perkeep-permanode-attribute-key-face))
+   (list "^\t\t\t.*$" '(0 perkeep-permanode-attribute-metadata-face))
   ))
 
 ;;;###autoload
 (defun perkeep-mode ()
   "Mode for browsing perkeep search results.
 Type \\[perkeep-follow-permanode] to visit the permanode below the
-cursor. Permanodes with a camliContent attribute will be fetched from
-perkeep and shown an another buffer. camliMember and camliPath
-attributes of a permanodes without a camliContent attribute will be
-searched for in another buffer.
+  cursor. Permanodes with a camliContent attribute will be fetched from
+  perkeep and shown an another buffer. camliMember and camliPath
+  attributes of a permanodes without a camliContent attribute will be
+  searched for in another buffer.
 Type \\[perkeep-previous-permanode] to move the cursor to the previous permanode.
 Type \\[perkeep-next-permanode] to move the cursor to the next permanode."
   (kill-all-local-variables)
