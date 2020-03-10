@@ -327,6 +327,14 @@ point."
 
 ;;;###autoload
 (defun perkeep-mode ()
+  "Mode for browsing perkeep search results.
+Type \\[perkeep-follow-permanode] to visit the permanode below the
+cursor. Permanodes with a camliContent attribute will be fetched from
+perkeep and shown an another buffer. camliMember and camliPath
+attributes of a permanodes without a camliContent attribute will be
+searched for in another buffer.
+Type \\[perkeep-previous-permanode] to move the cursor to the previous permanode.
+Type \\[perkeep-next-permanode] to move the cursor to the next permanode."
   (kill-all-local-variables)
   (use-local-map perkeep-mode-map)
   (setq major-mode 'perkeep-mode
