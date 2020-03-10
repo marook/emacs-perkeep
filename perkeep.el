@@ -343,6 +343,11 @@ point."
    (list "^\t\t\t.*$" '(0 perkeep-permanode-attribute-metadata-face))
   ))
 
+(defcustom perkeep-mode-hook nil
+  "Run at the very end of `perkeep-mode'."
+  :group 'perkeep
+  :type 'hook)
+
 ;;;###autoload
 (defun perkeep-mode ()
   "Mode for browsing perkeep search results.
@@ -364,6 +369,7 @@ Type \\[perkeep-next-permanode] to move the cursor to the next permanode."
   (setq-local font-lock-defaults
               '(perkeep-font-lock-keywords t nil nil beginning-of-line))
   (font-lock-ensure)
+  (run-mode-hooks 'perkeep-mode-hook)
   )
 
 (provide 'perkeep)
