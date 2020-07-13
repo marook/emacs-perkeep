@@ -1,10 +1,13 @@
 ;; -*- lexical-binding: t -*-
 ;; A client for the perkeep server.
 ;;
-(require 'request)
+(require 'dash)
+(require 'deferred)
+(require 'request-deferred)
 
 (setq perkeep--client-config-cache nil)
 
+;; (perkeep-client-config)
 (defun perkeep-client-config ()
   "Returns the default perkeep client config."
   (interactive)
@@ -15,12 +18,13 @@
 (defun perkeep--fetch-client-config ()
   (json-read-file "~/.config/perkeep/client-config.json"))
 
+;; (perkeep--client-config-server)
 (defun perkeep--client-config-server ()
   "Returns the default server from the perkeep client config."
   (interactive)
   (let (servers default-server auth)
-    (setq servers (assoc-string "servers" (perkeep-client-config)))
-    (setq default-server (cdr (-find (lambda (s) (assoc-string "default" s)) servers)))
+    (setq servers (cdr (assoc-string "servers" (perkeep-client-config))))
+    (setq default-server (cdr (-find (lambda (s) (not (eq (cdr (assoc-string "default" s)) json-false))) servers)))
     (setq auth (cdr (split-string (cdr (assoc-string "auth" default-server)) ":")))
     (list
      (cons "url" (cdr (assoc-string "server" default-server)))
@@ -29,24 +33,29 @@
 
 (setq perkeep--default-ui-config-cache nil)
 
-(defun perkeep--default-ui-config (callback)
+(defun perkeep--default-ui-config ()
   "Returns the configuration of the server's UI handler."
   (interactive)
   (if perkeep--default-ui-config-cache
-      (funcall callback perkeep--default-ui-config-cache)
+      (deferred:$
+        (deferred:next
+          (lambda ()
+            perkeep--default-ui-config-cache)))
     (setq
      perkeep--default-ui-config-cache
-     (perkeep--fetch-default-ui-config
-      (lambda (ui-config)
-        (setq perkeep--default-ui-config-cache ui-config)
-        (funcall callback perkeep--default-ui-config-cache))))))
+     (deferred:$
+       (perkeep--fetch-default-ui-config)
+       (deferred:nextc it
+         (lambda (ui-config)
+           (setq perkeep--default-ui-config-cache ui-config)
+           perkeep--default-ui-config-cache))))))
 
 ;; (perkeep--fetch-default-ui-config `(lambda (data) (message "hello %S" data)))
-(defun perkeep--fetch-default-ui-config (callback)
-  (perkeep--request "/ui/?camli.mode=config" callback))
+(defun perkeep--fetch-default-ui-config ()
+  (perkeep--request "/ui/?camli.mode=config"))
 
 ;; (perkeep-search (perkeep-query-expression "tag:solln") `(lambda (data) (switch-to-buffer (generate-new-buffer "perkeep-debug")) (insert (json-encode data)) (json-pretty-print-buffer) (javascript-mode)))
-(defun perkeep-search (query callback)
+(defun perkeep-search (query)
   "perkeep-search is the main entry point for performing a search
 against the perkeep repository.
 
@@ -58,14 +67,15 @@ perkeep.org/pkg/search/query.go within perkeep repository).
 There the following builder functions to create query lists:
 - `perkeep-query-expression'
 "
-  (perkeep--default-ui-config
-   (lambda (ui-config)
-     (perkeep--request
-      (concat
-       (cdr (assoc-string "searchRoot" ui-config))
-       "camli/search/query")
-      callback
-      :data (json-encode query)))))
+  (deferred:$
+    (perkeep--default-ui-config)
+    (deferred:nextc it
+      (lambda (ui-config) 
+        (perkeep--request
+         (concat
+          (cdr (assoc-string "searchRoot" ui-config))
+          "camli/search/query")
+         :data (json-encode query))))))
 
 ;; (perkeep-query-expression "is:image")
 (defun perkeep-query-expression (expression)
@@ -85,54 +95,111 @@ Example query strings are:
         (
          ("attrs" . ("camliContent")))))))))
 
-(cl-defun perkeep--download (blob-ref file-name callback)
-  (perkeep--default-ui-config
-   (lambda (ui-config)
-     (perkeep--request
-      (concat
-       (cdr (assoc-string "downloadHelper" ui-config))
-       blob-ref
-       "/"
-       file-name)
-      callback
-      :parser 'buffer-string))))
+(cl-defun perkeep--download (blob-ref file-name)
+  (deferred:$
+    (perkeep--default-ui-config)
+    (deferred:nextc it
+      (lambda (ui-config)
+        (perkeep--request
+         (concat
+          (cdr (assoc-string "downloadHelper" ui-config))
+          blob-ref
+          "/"
+          file-name)
+         :parser 'buffer-string)))))
 
-(cl-defun perkeep--request (path callback
-                              &key
-                              (data nil)
-                              (parser 'json-read))
-  (let (server user password)
+(defun perkeep--upload-claim (form)
+  (deferred:$
+    (perkeep--default-ui-config)
+    (deferred:nextc it
+      (lambda (ui-config)
+        (perkeep--request
+         (concat
+          (cdr (assoc-string "blobRoot" ui-config))
+          "camli/upload")
+         :files form)))))
+
+(defun perkeep--upload-form (form)
+  "Uploads the given alist form to perkeep. Invokes callback when done
+with the content ref as argument."
+  (deferred:$
+    (perkeep--default-ui-config)
+    (deferred:nextc it
+      (lambda (ui-config)
+        (perkeep--request
+         (cdr (assoc-string "uploadHelper" ui-config))
+         :files form)))
+    (deferred:nextc it
+      (lambda (response)
+        (cdr (assoc-string "fileref" (elt (cdr (assoc-string "got" response)) 0)))))))
+
+(defun perkeep--sign (claim)
+  (deferred:$
+    (perkeep--default-ui-config)
+    (deferred:nextc it
+      (lambda (ui-config)
+        (perkeep--request
+         (cdr (assoc-string "signHandler" (assoc-string "signing" ui-config)))
+         :data (let ((json-encoding-pretty-print t)
+                     (json-encoding-default-indentation "\t"))
+                 (concat
+                  "json="
+                  (url-hexify-string
+                   ;; stick to perkeeps unfixable weird claim json formatting
+                   (concat
+                    "{\"camliVersion\":1,\n"
+                    (substring
+                     (json-encode
+                      (append
+                       claim
+                       `(("camliSigner" . ,(cdr (assoc-string "publicKeyBlobRef" (assoc-string "signing" ui-config)))))))
+                     2
+                     )))))
+         :parser 'buffer-string)))))
+
+(cl-defun perkeep--request (path
+                            &key
+                            (data nil)
+                            (files nil)
+                            (parser 'json-read))
+  (let (server user password response-data)
     (setq server (perkeep--client-config-server))
     (setq user (cdr (assoc-string "user" server)))
     (setq password (cdr (assoc-string "password" server)))
-    (request
-     (concat
-      (cdr (assoc-string "url" server))
-      path)
-     :data data
-     :headers `(("Authorization" . ,(concat "Basic " (base64-encode-string (concat user ":" password)))))
-     :parser parser
-     ;; :sync "t"
-     :success (cl-function
-               (lambda (&key data &allow-other-keys)
-                 (funcall callback data))))))
+    ;; (setq request-log-level 'debug)
+    (deferred:$
+      (request-deferred
+       (concat
+        (cdr (assoc-string "url" server))
+        path)
+       :data data
+       :files files
+       :headers `(("Authorization" . ,(concat "Basic " (base64-encode-string (concat user ":" password)))))
+       :parser parser
+       ;; :sync "t"
+       )
+      (deferred:nextc it
+        (lambda (response)
+          (request-response-data response))))))
 
 ;;;###autoload
 (defun perkeep-find-permanode (expression)
   "Performs a perkeep serach for a given expression and shows the found permanodes in a newly created buffer"
   (interactive "sExpression: ")
-  (perkeep-search
-   (perkeep-query-expression expression)
-   (lambda (response)
-     (let (permanodes-buffer permanodes-start)
-       (setq permanodes-buffer (generate-new-buffer expression))
-       (switch-to-buffer permanodes-buffer)
-       (insert expression "\n\n")
-       (setq permanodes-start (point))
-       (perkeep--insert-search-results response)
-       (goto-char permanodes-start)
-       (perkeep-mode)
-       ))))
+  (deferred:$
+    (perkeep-search
+     (perkeep-query-expression expression))
+    (deferred:nextc it
+      (lambda (response)
+        (let (permanodes-buffer permanodes-start)
+          (setq permanodes-buffer (generate-new-buffer expression))
+          (switch-to-buffer permanodes-buffer)
+          (insert expression "\n\n")
+          (setq permanodes-start (point))
+          (perkeep--insert-search-results response)
+          (goto-char permanodes-start)
+          (perkeep-mode)
+          )))))
 
 (defun perkeep--insert-search-results (results)
   (mapc
@@ -205,19 +272,22 @@ shows the members of this permanode."
       (error "TODO implement visiting permanode members"))))
 
 (defun perkeep--follow-permanode-camli-content (permanode-ref title file-name camli-content)
-  (perkeep--download
-   camli-content
-   "blob"
-   (lambda (blob)
-     (let (blob-buffer)
-       (setq blob-buffer (generate-new-buffer (or title file-name)))
-       (switch-to-buffer blob-buffer)
-       (setq-local perkeep-permanode-ref permanode-ref)
-       (setq-local buffer-file-name file-name)
-       (insert blob)
-       (set-buffer-modified-p nil)
-       (goto-char (point-min))
-       (set-auto-mode)))))
+  (deferred:$
+    (perkeep--download
+     camli-content
+     "blob")
+    (deferred:nextc it
+      (lambda (blob)
+        (let (blob-buffer)
+          (setq blob-buffer (generate-new-buffer (or title file-name)))
+          (switch-to-buffer blob-buffer)
+          (insert blob)
+          (set-buffer-modified-p nil)
+          (goto-char (point-min))
+          (set-auto-mode)
+          (setq-local perkeep-permanode-ref permanode-ref)
+          (setq-local buffer-file-name file-name)
+          (perkeep-sourced-mode))))))
 
 (defun perkeep-previous-permanode ()
   (interactive)
@@ -372,6 +442,65 @@ Type \\[perkeep-next-permanode] to move the cursor to the next permanode."
   (run-mode-hooks 'perkeep-mode-hook)
   )
 
+(defun perkeep-save-buffer ()
+  "Saves the current buffer into perkeep."
+  (interactive)
+  (deferred:$
+    (perkeep--upload-form
+     `(("ui-upload-file-helper-form" . ("hello.txt" :data ,(buffer-string)))))
+    (deferred:nextc it
+      (lambda (buffer-content-ref)
+        (perkeep--sign
+         (perkeep--set-attribute-claim perkeep-permanode-ref "camliContent" buffer-content-ref))))
+    (deferred:nextc it
+      (lambda (signed-claim)
+        (let (claim-key)
+          (setq claim-key (concat "sha224-" (secure-hash 'sha224 signed-claim)))
+          (perkeep--upload-claim
+           `((,claim-key . ("blob" :data ,(eval signed-claim))))))))
+    (deferred:nextc it
+      (lambda ()
+        (set-buffer-modified-p ())))))
+
+(defun perkeep--set-attribute-claim (permanode-ref key value)
+  `(
+    ("camliType" . "claim")
+    ("permaNode" . ,(eval permanode-ref))
+    ("claimType" . "set-attribute")
+    ("claimDate" . ,(perkeep--now))
+    ("attribute" . ,(eval key))
+    ("value" . ,(eval value))
+    ))
+
+;; (perkeep--now)
+(defun perkeep--now ()
+  ;; TODO use correct milliseconds instead of 000
+  (substring (shell-command-to-string "date -u +%Y-%m-%dT%H:%M:%S.000Z") 0 -1))
+
+(defvar perkeep-sourced-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-x C-s") 'perkeep-save-buffer)
+    map)
+  "Keymap for `perkeep-sourced-mode'.")
+
+(define-minor-mode perkeep-sourced-mode
+  "Saves the buffer into perkeep instead of into a file."
+  (interactive (list (or current-prefix-arg 'toggle)))
+  (let ((enable
+         (if (eq arg 'toggle)
+             (not perkeep-sourced-mode)
+           (> (prefix-numeric-value arg) 0))))
+    (if enable
+        (perkeep-enable-perkeep-sourced-mode)
+      (perkeep-disable-perkeep-sourced-mode)))
+  :keymap perkeep-sourced-mode-map)
+
+(defun perkeep-enable-perkeep-sourced-mode ()
+  )
+
+(defun perkeep-disable-perkeep-sourced-mode ()
+  )
+          
 (provide 'perkeep)
 
 ;; (require 'perkeep)
