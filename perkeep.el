@@ -284,9 +284,9 @@ shows the members of this permanode."
           (insert blob)
           (set-buffer-modified-p nil)
           (goto-char (point-min))
-          (set-auto-mode)
-          (setq-local perkeep-permanode-ref permanode-ref)
           (setq-local buffer-file-name file-name)
+          (normal-mode)
+          (setq-local perkeep-permanode-ref permanode-ref)
           (perkeep-sourced-mode))))))
 
 (defun perkeep-previous-permanode ()
