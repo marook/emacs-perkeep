@@ -447,7 +447,7 @@ Type \\[perkeep-next-permanode] to move the cursor to the next permanode."
   (interactive)
   (deferred:$
     (perkeep--upload-form
-     `(("ui-upload-file-helper-form" . ("hello.txt" :data ,(buffer-string)))))
+     `(("ui-upload-file-helper-form" . (,(file-name-nondirectory buffer-file-name) :data ,(buffer-string)))))
     (deferred:nextc it
       (lambda (buffer-content-ref)
         (perkeep--sign
