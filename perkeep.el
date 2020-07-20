@@ -442,16 +442,56 @@ Type \\[perkeep-next-permanode] to move the cursor to the next permanode."
   (run-mode-hooks 'perkeep-mode-hook)
   )
 
+;;;###autoload
 (defun perkeep-save-buffer ()
-  "Saves the current buffer into perkeep."
+  "Saves the current buffer into perkeep.
+
+This will update the content of the visited permanode or create a
+new one if this buffer has not yet visited a permanode."
   (interactive)
   (deferred:$
+    (deferred:next
+      (lambda ()
+        (if (local-variable-p 'perkeep-permanode-ref)
+            (deferred:next
+              (lambda ()
+                perkeep-permanode-ref))
+          (deferred:$
+            (perkeep--create-permanode)
+            (deferred:nextc it
+              (lambda (permanode-ref)
+                (setq-local perkeep-permanode-ref permanode-ref)
+                (perkeep-sourced-mode)
+                permanode-ref))))))
+    (deferred:nextc it
+      (lambda (permanode-ref)
+        (perkeep--save-buffer-to-existing-permanode permanode-ref)))))
+
+(defun perkeep--create-permanode ()
+  (perkeep--persist-claim
+   (perkeep--create-permanode-claim
+    (format-message "%S" (/ (float (random most-positive-fixnum)) most-positive-fixnum)))))
+
+(defun perkeep--save-buffer-to-existing-permanode (permanode-ref)
+  (deferred:$
     (perkeep--upload-form
-     `(("ui-upload-file-helper-form" . (,(file-name-nondirectory buffer-file-name) :data ,(buffer-string)))))
+     `(("ui-upload-file-helper-form" . (,(perkeep--buffer-perkeep-file-name) :data ,(buffer-string)))))
     (deferred:nextc it
       (lambda (buffer-content-ref)
-        (perkeep--sign
-         (perkeep--set-attribute-claim perkeep-permanode-ref "camliContent" buffer-content-ref))))
+        (perkeep--persist-claim
+         (perkeep--set-attribute-claim permanode-ref "camliContent" buffer-content-ref))))
+    (deferred:nextc it
+      (lambda ()
+        (set-buffer-modified-p ())))))
+
+(defun perkeep--buffer-perkeep-file-name ()
+  (if buffer-file-name
+      (file-name-nondirectory buffer-file-name)
+    (buffer-name)))
+
+(defun perkeep--persist-claim (claim)
+  (deferred:$
+    (perkeep--sign claim)
     (deferred:nextc it
       (lambda (signed-claim)
         (let (claim-key)
@@ -459,8 +499,18 @@ Type \\[perkeep-next-permanode] to move the cursor to the next permanode."
           (perkeep--upload-claim
            `((,claim-key . ("blob" :data ,(eval signed-claim))))))))
     (deferred:nextc it
-      (lambda ()
-        (set-buffer-modified-p ())))))
+      (lambda (response)
+        (cdr
+         (assoc-string "blobRef"
+                       (aref
+                        (cdr
+                         (assoc-string "received" response)) 0)))))))
+
+(defun perkeep--create-permanode-claim (rand)
+  `(
+    ("camliType" . "permanode")
+    ("random" . ,rand)
+    ))
 
 (defun perkeep--set-attribute-claim (permanode-ref key value)
   `(
@@ -505,6 +555,7 @@ Type \\[perkeep-next-permanode] to move the cursor to the next permanode."
 
 ;; (require 'perkeep)
 ;; (setf debug-on-error t)
+;; (setf deferred:debug-on-signal t)
 
 ;; (perkeep--default-ui-config `(lambda (data) (message "hello %S" data)))
 
