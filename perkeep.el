@@ -449,23 +449,30 @@ Type \\[perkeep-next-permanode] to move the cursor to the next permanode."
 This will update the content of the visited permanode or create a
 new one if this buffer has not yet visited a permanode."
   (interactive)
-  (deferred:$
-    (deferred:next
-      (lambda ()
-        (if (local-variable-p 'perkeep-permanode-ref)
-            (deferred:next
-              (lambda ()
-                perkeep-permanode-ref))
-          (deferred:$
-            (perkeep--create-permanode)
-            (deferred:nextc it
-              (lambda (permanode-ref)
-                (setq-local perkeep-permanode-ref permanode-ref)
-                (perkeep-sourced-mode)
-                permanode-ref))))))
-    (deferred:nextc it
-      (lambda (permanode-ref)
-        (perkeep--save-buffer-to-existing-permanode permanode-ref)))))
+  (let (permanode-ref)
+    (deferred:$
+      (deferred:next
+        (lambda ()
+          (if (local-variable-p 'perkeep-permanode-ref)
+              (deferred:next
+                (lambda ()
+                  (message "Saving to permanode %S..." perkeep-permanode-ref)
+                  perkeep-permanode-ref))
+            (message "Saving to new permanode...")
+            (deferred:$
+              (perkeep--create-permanode)
+              (deferred:nextc it
+                (lambda (permanode-ref)
+                  (setq-local perkeep-permanode-ref permanode-ref)
+                  (perkeep-sourced-mode)
+                  permanode-ref))))))
+      (deferred:nextc it
+        (lambda (pr)
+          (setq permanode-ref pr)
+          (perkeep--save-buffer-to-existing-permanode permanode-ref)))
+      (deferred:nextc it
+        (lambda ()
+          (message "Wrote permanode %S" permanode-ref))))))
 
 (defun perkeep--create-permanode ()
   (perkeep--persist-claim
