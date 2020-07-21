@@ -219,7 +219,7 @@ with the content ref as argument."
     (mapc
      (lambda (attrs)
        (let ((key (car attrs)))
-         (insert (format-message "\t%S\n" key))
+         (insert (format-message "\t%s\n" key))
          (mapc
           (lambda (value)
             (perkeep--insert-permanode-attribute-value 2 key value results))
@@ -249,7 +249,7 @@ with the content ref as argument."
   (insert (make-string level ?\t))
   (insert
    (cond
-    ((numberp value) (format-message "%S" value))
+    ((numberp value) (format-message "%s" value))
     (t value))
    "\n"))
 
@@ -456,7 +456,7 @@ new one if this buffer has not yet visited a permanode."
           (if (local-variable-p 'perkeep-permanode-ref)
               (deferred:next
                 (lambda ()
-                  (message "Saving to permanode %S..." perkeep-permanode-ref)
+                  (message "Saving to permanode %s..." perkeep-permanode-ref)
                   perkeep-permanode-ref))
             (message "Saving to new permanode...")
             (deferred:$
@@ -472,12 +472,12 @@ new one if this buffer has not yet visited a permanode."
           (perkeep--save-buffer-to-existing-permanode permanode-ref)))
       (deferred:nextc it
         (lambda ()
-          (message "Wrote permanode %S" permanode-ref))))))
+          (message "Wrote permanode %s" permanode-ref))))))
 
 (defun perkeep--create-permanode ()
   (perkeep--persist-claim
    (perkeep--create-permanode-claim
-    (format-message "%S" (/ (float (random most-positive-fixnum)) most-positive-fixnum)))))
+    (format-message "%s" (/ (float (random most-positive-fixnum)) most-positive-fixnum)))))
 
 (defun perkeep--save-buffer-to-existing-permanode (permanode-ref)
   (deferred:$
