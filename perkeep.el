@@ -457,12 +457,38 @@ Type \\[perkeep-next-permanode] to move the cursor to the next permanode."
   (run-mode-hooks 'perkeep-mode-hook)
   )
 
+(defcustom perkeep-permanode-created-hook nil
+  "Run after `perkeep-save-buffer' has created a permanode in perkeep.
+
+The permanode's ref is passed as argument.
+
+This hook can be used to add custom attributes to created
+permanodes. For example adding a todo tag for later refinement:
+
+(add-hook
+ 'perkeep-permanode-created-hook
+ (lambda (permanode-ref)
+   (perkeep-persist-claim
+    (perkeep-add-attribute-claim permanode-ref \"tag\" \"todo\"))))
+"
+  :group 'perkeep
+  :type 'hook)
+
+(defcustom perkeep-buffer-saved-hook nil
+  "Run after a successful save by `perkeep-save-buffer' into perkeep.
+
+The permanode's ref is passed as argument."
+  :group 'perkeep
+  :type 'hook)
+
 ;;;###autoload
 (defun perkeep-save-buffer ()
   "Saves the current buffer into perkeep.
 
 This will update the content of the visited permanode or create a
-new one if this buffer has not yet visited a permanode."
+new one if this buffer has not yet visited a permanode. Newly
+created permanodes will be attached to this buffer after
+creation."
   (interactive)
   (let (permanode-ref)
     (deferred:$
@@ -480,6 +506,9 @@ new one if this buffer has not yet visited a permanode."
                 (lambda (permanode-ref)
                   (setq-local perkeep-permanode-ref permanode-ref)
                   (perkeep-sourced-mode)
+                  (-each perkeep-permanode-created-hook
+                    (lambda (hook)
+                      (funcall hook permanode-ref)))
                   permanode-ref))))))
       (deferred:nextc it
         (lambda (pr)
@@ -487,11 +516,14 @@ new one if this buffer has not yet visited a permanode."
           (perkeep--save-buffer-to-existing-permanode permanode-ref)))
       (deferred:nextc it
         (lambda ()
-          (message "Wrote permanode %s" permanode-ref))))))
+          (message "Wrote permanode %s" permanode-ref)
+          (-each perkeep-buffer-saved-hook
+            (lambda (hook)
+              (funcall hook permanode-ref))))))))
 
 (defun perkeep--create-permanode ()
-  (perkeep--persist-claim
-   (perkeep--create-permanode-claim
+  (perkeep-persist-claim
+   (perkeep-create-permanode-claim
     (format-message "%s" (/ (float (random most-positive-fixnum)) most-positive-fixnum)))))
 
 (defun perkeep--save-buffer-to-existing-permanode (permanode-ref)
@@ -500,8 +532,8 @@ new one if this buffer has not yet visited a permanode."
      `(("ui-upload-file-helper-form" . (,(perkeep--buffer-perkeep-file-name) :data ,(buffer-string)))))
     (deferred:nextc it
       (lambda (buffer-content-ref)
-        (perkeep--persist-claim
-         (perkeep--set-attribute-claim permanode-ref "camliContent" buffer-content-ref))))
+        (perkeep-persist-claim
+         (perkeep-set-attribute-claim permanode-ref "camliContent" buffer-content-ref))))
     (deferred:nextc it
       (lambda ()
         (set-buffer-modified-p ())))))
@@ -511,7 +543,12 @@ new one if this buffer has not yet visited a permanode."
       (file-name-nondirectory buffer-file-name)
     (buffer-name)))
 
-(defun perkeep--persist-claim (claim)
+(defun perkeep-persist-claim (claim)
+  "Persists a given claim in perkeep.
+
+The functions `perkeep-create-permanode-claim' or
+`perkeep-set-attribute-claim' can be used to produce claims for
+this function."
   (deferred:$
     (perkeep--sign claim)
     (deferred:nextc it
@@ -522,19 +559,20 @@ new one if this buffer has not yet visited a permanode."
            `((,claim-key . ("blob" :data ,(eval signed-claim))))))))
     (deferred:nextc it
       (lambda (response)
+        ;; TODO define a more sane return value of the perkeep-persist-claim function
         (cdr
          (assoc-string "blobRef"
                        (aref
                         (cdr
                          (assoc-string "received" response)) 0)))))))
 
-(defun perkeep--create-permanode-claim (rand)
+(defun perkeep-create-permanode-claim (rand)
   `(
     ("camliType" . "permanode")
     ("random" . ,rand)
     ))
 
-(defun perkeep--set-attribute-claim (permanode-ref key value)
+(defun perkeep-set-attribute-claim (permanode-ref key value)
   `(
     ("camliType" . "claim")
     ("permaNode" . ,(eval permanode-ref))
@@ -543,6 +581,18 @@ new one if this buffer has not yet visited a permanode."
     ("attribute" . ,(eval key))
     ("value" . ,(eval value))
     ))
+
+(defun perkeep-add-attribute-claim (permanode-ref key value)
+  `(
+    ("camliType" . "claim")
+    ("permaNode" . ,(eval permanode-ref))
+    ("claimType" . "add-attribute")
+    ("claimDate" . ,(perkeep--now))
+    ("attribute" . ,(eval key))
+    ("value" . ,(eval value))
+    ))
+
+;; TODO del attribute claim with and without value
 
 ;; (perkeep--now)
 (defun perkeep--now ()
