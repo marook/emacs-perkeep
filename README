@@ -1,0 +1,17 @@
+emacs-perkeep - perkeep integration for emacs
+
+1) Requirements
+2) License
+
+
+------------------------------------------------------------------------
+Requirements
+
+You need to have the unix date command installed.
+
+
+------------------------------------------------------------------------
+License
+
+For details like copying, warranty and usage or emacs-perkeep see the
+file LICENSE.
