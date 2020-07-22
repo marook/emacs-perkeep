@@ -10,7 +10,8 @@ emacs-perkeep - perkeep integration for emacs
 ------------------------------------------------------------------------
 Requirements
 
-You need to have the unix date command installed.
+You need to have the unix date command installed. So linux should be
+fine as host OS. Not so sure about windows.
 
 
 ------------------------------------------------------------------------
