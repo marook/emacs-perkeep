@@ -596,8 +596,7 @@ this function."
 
 ;; (perkeep--now)
 (defun perkeep--now ()
-  ;; TODO use correct milliseconds instead of 000
-  (substring (shell-command-to-string "date -u +%Y-%m-%dT%H:%M:%S.000Z") 0 -1))
+  (format-time-string "%FT%T.%3NZ" nil "UTC0"))
 
 (defvar perkeep-sourced-mode-map
   (let ((map (make-sparse-keymap)))
