@@ -10,8 +10,12 @@ emacs-perkeep - perkeep integration for emacs
 ------------------------------------------------------------------------
 Requirements
 
-You need to have the unix date command installed. So linux should be
-fine as host OS. Not so sure about windows.
+emacs-perkeep should work with GNU emacs 26.3. And probably also more
+recent versions.
+
+emacs-perkeep reads the perkeep configuration from
+~/.config/perkeep/client-config.json. It uses the default server
+configured there for all interactions with perkeep.
 
 
 ------------------------------------------------------------------------
