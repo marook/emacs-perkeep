@@ -384,11 +384,14 @@ point."
 (defvar perkeep-mode-map
   (let ((map (make-keymap)))
     (set-keymap-parent map special-mode-map)
+    (define-key map "C" 'kill-buffer-and-window)
     (define-key map "f" 'perkeep-follow-permanode)
     (define-key map "\C-m" 'perkeep-follow-permanode)
     (define-key map "p" 'perkeep-previous-permanode)
     (define-key map " " 'perkeep-next-permanode)
     (define-key map "n" 'perkeep-next-permanode)
+    (define-key map "r" 'isearch-backward)
+    (define-key map "s" 'isearch-forward)
     map)
   "Local keymap for perkeep mode buffers.")
 
