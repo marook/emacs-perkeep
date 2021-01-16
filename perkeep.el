@@ -199,7 +199,7 @@ with the content ref as argument."
 
 ;;;###autoload
 (defun perkeep-find-permanode (expression)
-  "Performs a perkeep serach for a given expression and shows the found permanodes in a newly created buffer"
+  "Performs a perkeep search for a given expression and shows the found permanodes in a newly created buffer"
   (interactive "sExpression: ")
   (deferred:$
     (perkeep-search
