@@ -199,22 +199,44 @@ with the content ref as argument."
 
 ;;;###autoload
 (defun perkeep-find-permanode (expression)
-  "Performs a perkeep search for a given expression and shows the found permanodes in a newly created buffer"
+  "Performs a perkeep search for a given expression and shows the
+found permanodes in a newly created buffer."
   (interactive "sExpression: ")
-  (deferred:$
-    (perkeep-search
-     (perkeep-query-expression expression))
-    (deferred:nextc it
-      (lambda (response)
-        (let (permanodes-buffer permanodes-start)
-          (setq permanodes-buffer (generate-new-buffer expression))
-          (switch-to-buffer permanodes-buffer)
-          (insert expression "\n\n")
-          (setq permanodes-start (point))
-          (perkeep--insert-search-results response)
-          (goto-char permanodes-start)
-          (perkeep-mode)
-          )))))
+  (switch-to-buffer (generate-new-buffer expression))
+  (insert expression "\n")
+  (perkeep-mode)
+  (perkeep-find-permanode-from-buffer))
+
+(defun perkeep-find-permanode-from-buffer ()
+  "Performs a perkeep search with an expression from the first
+line of the current buffer. The results will replace the content
+in the buffer after the expression."
+  (interactive)
+  (let ((expression (buffer-substring
+                    (point-min)
+                    (progn
+                      (goto-char (point-min))
+                      (end-of-line)
+                      (point))))
+        (search-buffer (current-buffer)))
+    (goto-char (point-min))
+    (forward-line (1- 2))
+    (read-only-mode 0)
+    (delete-region (point) (point-max))
+    (read-only-mode 1)
+    (deferred:$
+      (perkeep-search
+       (perkeep-query-expression expression))
+      (deferred:nextc it
+        (lambda (response)
+          (with-current-buffer search-buffer
+            (goto-line 3)
+            (read-only-mode 0)
+            (insert "\n")
+            (perkeep--insert-search-results response)
+            (goto-line 3)
+            (read-only-mode 1)
+            ))))))
 
 (defun perkeep--insert-search-results (results)
   (mapc
@@ -392,6 +414,7 @@ point."
     (define-key map "n" 'perkeep-next-permanode)
     (define-key map "r" 'isearch-backward)
     (define-key map "s" 'isearch-forward)
+    (define-key map "g" 'perkeep-find-permanode-from-buffer)
     map)
   "Local keymap for perkeep mode buffers.")
 
