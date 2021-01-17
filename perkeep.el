@@ -384,7 +384,7 @@ point."
 (defvar perkeep-mode-map
   (let ((map (make-keymap)))
     (set-keymap-parent map special-mode-map)
-    (define-key map "C" 'kill-buffer-and-window)
+    (define-key map "C" 'kill-current-buffer)
     (define-key map "f" 'perkeep-follow-permanode)
     (define-key map "\C-m" 'perkeep-follow-permanode)
     (define-key map "p" 'perkeep-previous-permanode)
